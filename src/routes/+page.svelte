@@ -30,7 +30,7 @@
 
     onMount(() => {
         // 1. Initialize Audio Element for the 'Beep'
-        alertAudio = new Audio('/pager-beep.mp3'); // Assumes you have a file at static/pager-beep.mp3
+        alertAudio = new Audio('/beep2.mp3'); // Assumes you have a file at static/pager-beep.mp3
         alertAudio.loop = true;
         
         // Check if audio needs unlocking (for mobile/Chrome autoplay policy)
