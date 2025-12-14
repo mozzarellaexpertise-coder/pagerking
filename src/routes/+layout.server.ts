@@ -1,14 +1,18 @@
 // src/routes/+layout.server.ts
-import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = async ({ locals: { safeGetSession }, cookies }) => {
-	// Fetch the session and user data
-    const { session, user } = await safeGetSession();
+import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 
-	return {
-		session,
-		user,
-		// Pass the cookies to +layout.ts so it can initialize the browser client correctly
-		cookies: cookies.getAll(),
-	};
+// ... (your existing load function logic, e.g., safeGetSession) ...
+
+export const load = async (event) => {
+    const { session, user } = await event.locals.safeGetSession();
+
+    return {
+        session,
+        user,
+        // CRITICAL: Explicitly pass the public keys so they are available to the client
+        // You should check if they are already in the 'data' object on the client side
+        supabaseUrl: PUBLIC_SUPABASE_URL,
+        supabaseAnonKey: PUBLIC_SUPABASE_ANON_KEY
+    };
 };
