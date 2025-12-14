@@ -1,5 +1,6 @@
 <script lang="ts">
  import { onMount } from 'svelte';
+ import { invalidate } from '$app/navigation'; // <-- ADD THIS IMPORT
  import type { PageData } from './$types';
 
  // Data passed from +layout.ts
@@ -55,6 +56,7 @@
   } else {
    // Success: The session update will automatically trigger the redirect 
    // via your +page.server.ts file.
+   await invalidate('supabase:auth');
    console.log("Sign In successful. Session updated, redirecting...");
   }
   
