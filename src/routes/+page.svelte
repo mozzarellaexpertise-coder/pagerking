@@ -1,11 +1,12 @@
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { supabase } from '$lib/supabaseClient';
+    import { getSupabaseClient } from '$lib/supabaseClient';
     import { fly } from 'svelte/transition';
     import type { User } from '@supabase/supabase-js';
     import type { PageData } from './$types';
 
     // Props passed from +layout.server.ts via +layout.ts
+    const supabase = getSupabaseClient();
     export let data: PageData;
     let currentUser: User | null = data.session?.user ?? null;
 
@@ -249,12 +250,14 @@
         </select>
     </div>
 
-    <div 
-        id="msgContainer" 
-        class="msg-container" 
-        class:alerting={isAlerting} 
-        on:click={stopAlert}
-    >
+<div 
+    id="msgContainer" 
+    class="msg-container" 
+    class:alerting={isAlerting} 
+    on:click={stopAlert}
+    role="button"              tabindex="0"               >
+    </div>
+    
         {#if isLoading}
             <p class="loading-state">Loading messages...</p>
         {:else if !selectedContactId}
