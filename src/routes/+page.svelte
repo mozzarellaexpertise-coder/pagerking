@@ -129,7 +129,7 @@
             .insert({
                 sender_id: currentUser.id,
                 receiver_id: selectedContactId,
-                content: messageToSend,
+                text: messageToSend,
             });
 
         if (error) {
