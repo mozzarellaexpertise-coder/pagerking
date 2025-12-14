@@ -1,15 +1,20 @@
-import adapter from '@sveltejs/adapter-static';
+// svelte.config.js
+
+// 1. IMPORT THE CORRECT ADAPTER
+import adapter from '@sveltejs/adapter-vercel'; 
 import preprocess from 'svelte-preprocess';
 
-export default {
-  preprocess: preprocess(),
-  kit: {
-    adapter: adapter({
-      fallback: 'index.html', // SPA fallback for dynamic routes
-    }),
-    // remove `prerender.default`
-    prerender: {
-      entries: [] // leave empty or list pages you want prerendered
+/** @type {import('@sveltejs/kit').Config} */
+const config = {
+    // We can keep the preprocess block
+    preprocess: preprocess(),
+
+    kit: {
+        // 2. USE THE CORRECT ADAPTER
+        adapter: adapter(),
+        
+        // We no longer need the 'prerender' block since Vercel handles dynamic rendering
     }
-  }
 };
+
+export default config;
