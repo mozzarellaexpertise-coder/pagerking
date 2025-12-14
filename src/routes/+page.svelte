@@ -257,7 +257,7 @@
     on:click={stopAlert}
     role="button"              tabindex="0"               >
     </div>
-    
+
         {#if isLoading}
             <p class="loading-state">Loading messages...</p>
         {:else if !selectedContactId}
@@ -274,7 +274,6 @@
                 </div>
             {/each}
         {/if}
-    </div>
     
     <form on:submit|preventDefault={sendMessage} class="send-form">
         <input
