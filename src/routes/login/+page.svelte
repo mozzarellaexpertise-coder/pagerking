@@ -1,94 +1,96 @@
 <script lang="ts">
- import { invalidate } from '$app/navigation';
- import type { PageData } from './$types';
+import { goto } from '$app/navigation';
+import { invalidate } from '$app/navigation';
+import type { PageData } from './$types';
 
- export let data: PageData;
- $: ({ supabase, session } = data);
+export let data: PageData;
+$: ({ supabase, session } = data);
 
- let email = '';
- let password = '';
- let errorMsg = '';
- let isLoading = false;
+let email = '';
+let password = '';
+let errorMsg = '';
+let isLoading = false;
 
- async function handleSignUp() {
-  isLoading = true;
-  errorMsg = '';
+async function handleSignUp() {
+    isLoading = true;
+    errorMsg = '';
 
-  const { error, data: signUpData } = await supabase.auth.signUp({
-   email, password,
-   options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
-  });
+    const { error, data: signUpData } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` }
+    });
 
-  if (error) {
-   errorMsg = error.message;
-  } else {
-   // Ensure user row exists
-   const { data: existing } = await supabase
-     .from('users')
-     .select('id')
-     .eq('id', signUpData.user.id)
-     .single();
+    if (error) errorMsg = error.message;
+    else {
+        // Ensure user row exists
+        const { data: existing } = await supabase
+            .from('users')
+            .select('id')
+            .eq('id', signUpData.user.id)
+            .single();
 
-   if (!existing) {
-     await supabase.from('users').insert({
-       id: signUpData.user.id,
-       username: email.split('@')[0],
-       email
-     });
-   }
+        if (!existing) {
+            await supabase.from('users').insert({
+                id: signUpData.user.id,
+                username: email.split('@')[0],
+                email
+            });
+        }
 
-   alert("🎉 Sign‑up successful! Check your email.");
-   email = '';
-   password = '';
-  }
-
-  isLoading = false;
- }
-
- async function handleSignIn() {
-  isLoading = true;
-  errorMsg = '';
-
-  const { error, data: signInData } = await supabase.auth.signInWithPassword({
-   email, password
-  });
-
-  if (!error) {
-    // Ensure user row exists
-    const { data: existing } = await supabase
-      .from('users')
-      .select('id')
-      .eq('id', signInData.user.id)
-      .single();
-
-    if (!existing) {
-      await supabase.from('users').insert({
-        id: signInData.user.id,
-        username: email.split('@')[0],
-        email
-      });
+        alert("🎉 Sign‑up successful! Check your email.");
+        email = '';
+        password = '';
     }
 
-    await invalidate('supabase:auth');
-    console.log("Sign In successful. Redirecting...");
-  } else {
-    errorMsg = error.message;
-    password = '';
-  }
+    isLoading = false;
+}
 
-  isLoading = false;
- }
+async function handleSignIn() {
+    isLoading = true;
+    errorMsg = '';
+
+    const { error, data: signInData } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (!error) {
+        // Ensure user row exists
+        const { data: existing } = await supabase
+            .from('users')
+            .select('id')
+            .eq('id', signInData.user.id)
+            .single();
+
+        if (!existing) {
+            await supabase.from('users').insert({
+                id: signInData.user.id,
+                username: email.split('@')[0],
+                email
+            });
+        }
+
+        await invalidate('supabase:auth');
+        console.log("Sign In successful. Redirecting...");
+
+        // ✅ Redirect to pager page
+        goto('/pager');
+    } else {
+        errorMsg = error.message;
+        password = '';
+    }
+
+    isLoading = false;
+}
 </script>
 
 <main>
- <h2>Pager System</h2>
- <form on:submit|preventDefault={handleSignIn}>
-  <input type="email" placeholder="you@example.com" bind:value={email} required disabled={isLoading} />
-  <input type="password" placeholder="••••••••" bind:value={password} required disabled={isLoading} />
-  <button type="submit" disabled={isLoading}>{isLoading ? 'Processing…' : 'Sign In'}</button>
-  <button type="button" on:click={handleSignUp} disabled={isLoading}>Create New Account</button>
- </form>
- {#if errorMsg}<p class="error">{errorMsg}</p>{/if}
+    <h2>Pager System</h2>
+    <form on:submit|preventDefault={handleSignIn}>
+        <input type="email" placeholder="you@example.com" bind:value={email} required disabled={isLoading} />
+        <input type="password" placeholder="••••••••" bind:value={password} required disabled={isLoading} />
+        <button type="submit" disabled={isLoading}>{isLoading ? 'Processing…' : 'Sign In'}</button>
+        <button type="button" on:click={handleSignUp} disabled={isLoading}>Create New Account</button>
+    </form>
+    {#if errorMsg}<p class="error">{errorMsg}</p>{/if}
 </main>
 
 <style>
