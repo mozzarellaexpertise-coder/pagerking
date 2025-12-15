@@ -1,13 +1,16 @@
 <script lang="ts">
 import { onMount, onDestroy } from 'svelte';
 import { getSupabaseClient } from '$lib/supabaseClient';
+import { fly } from 'svelte/transition';
 import type { User } from '@supabase/supabase-js';
 import type { PageData } from './$types';
 
+// --- Supabase client & current user ---
 const supabase = getSupabaseClient();
 export let data: PageData;
 let currentUser: User | null = data.session?.user ?? null;
 
+// --- State ---
 let users: any[] = [];
 let messages: any[] = [];
 let selectedContactId: string | null = null;
@@ -15,26 +18,32 @@ let selectedContactName: string = 'Select Contact';
 let newMessage: string = '';
 let isLoading = false;
 let errorMsg = '';
+
 let alertAudio: HTMLAudioElement;
 let isAlerting = false;
 let showAudioUnlockPrompt = false;
 let audioUnlocked = false;
 
+// --- Lifecycle ---
 onMount(() => {
+    // Audio setup
     alertAudio = new Audio('/beep2.mp3');
     alertAudio.loop = true;
 
-    if (typeof window !== 'undefined') {
-        new Audio().play().then(()=>audioUnlocked=true).catch(()=>showAudioUnlockPrompt=true);
-    }
+    // Audio unlock test
+    const testAudio = new Audio();
+    testAudio.play().then(() => audioUnlocked = true).catch(() => showAudioUnlockPrompt = true);
 
     loadUsers();
     setupRealtime();
-    if (selectedContactId) loadMessages();
 });
 
-onDestroy(() => { supabase.removeAllChannels(); stopAlert(); });
+onDestroy(() => {
+    supabase.removeAllChannels();
+    stopAlert();
+});
 
+// --- Load users ---
 async function loadUsers() {
     if (!currentUser) return;
     isLoading = true;
@@ -44,108 +53,183 @@ async function loadUsers() {
         .not('id','eq',currentUser.id)
         .limit(10);
     if (error) { console.error(error); errorMsg='Failed to load contacts'; }
-    else { users = userData || []; if(users.length>0){selectedContactId=users[0].id;selectedContactName=users[0].email;loadMessages();} }
+    else if (userData) {
+        users = userData;
+        if(users.length>0) {
+            selectedContactId = users[0].id;
+            selectedContactName = users[0].email;
+            loadMessages();
+        }
+    }
     isLoading = false;
 }
 
+// --- Load last message ---
 async function loadMessages() {
-    if(!currentUser||!selectedContactId){ messages=[]; return; }
-    isLoading=true; messages=[];
-    const { data: messageData, error } = await supabase
+    if (!currentUser || !selectedContactId) { messages = []; return; }
+    isLoading = true;
+    const { data, error } = await supabase
         .from('messages')
         .select('*')
         .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${selectedContactId}),and(sender_id.eq.${selectedContactId},receiver_id.eq.${currentUser.id})`)
-        .order('created_at',{ascending:true});
+        .order('created_at',{ascending:false})
+        .limit(1);
     if(error){ console.error(error); errorMsg='Failed to load messages'; }
-    else { messages=messageData||[]; scrollToBottom(); }
+    else messages = data.reverse(); // newest last
     isLoading=false;
 }
 
+// --- Send message (insert + prune old messages) ---
 async function sendMessage() {
-    if(!currentUser||!selectedContactId||newMessage.trim()==='') return;
-    const messageToSend = newMessage.trim();
+    if (!currentUser || !selectedContactId || newMessage.trim()==='') return;
+    const msg = newMessage.trim();
     newMessage=''; errorMsg='';
 
-    // Ensure sender exists
-    const { data: senderExists } = await supabase.from('users').select('id').eq('id',currentUser.id).single();
-    if(!senderExists) await supabase.from('users').insert({id:currentUser.id,username:currentUser.email.split('@')[0],email:currentUser.email});
+    // Insert message
+    const { data: inserted, error } = await supabase
+        .from('messages')
+        .insert({ sender_id: currentUser.id, receiver_id: selectedContactId, text: msg })
+        .select().single();
+    if(error){ console.error(error); errorMsg='Failed to send message'; newMessage=msg; return; }
 
-    // Ensure receiver exists
-    const { data: receiverExists } = await supabase.from('users').select('id').eq('id',selectedContactId).single();
-    if(!receiverExists) await supabase.from('users').insert({id:selectedContactId,username:selectedContactName,email:`${selectedContactName}@example.com`});
-
-    const { error } = await supabase.from('messages').insert({sender_id:currentUser.id,receiver_id:selectedContactId,text:messageToSend});
-    if(error){ console.error(error); errorMsg='Failed to send message'; newMessage=messageToSend; }
+    // Delete old messages for this contact pair, keep only last
+    await supabase
+        .from('messages')
+        .delete()
+        .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${selectedContactId}),and(sender_id.eq.${selectedContactId},receiver_id.eq.${currentUser.id})`)
+        .not('id','eq',inserted.id);
 }
 
+// --- Realtime subscription ---
 function setupRealtime() {
-    supabase.channel('messages').on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},payload=>{
-        const newMsg=payload.new;
-        if((newMsg.sender_id===currentUser?.id && newMsg.receiver_id===selectedContactId)||
-           (newMsg.sender_id===selectedContactId && newMsg.receiver_id===currentUser?.id)){
-            messages=[...messages,newMsg]; scrollToBottom();
+    supabase.channel('messages')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'}, payload=>{
+        const m = payload.new;
+        if((m.sender_id===currentUser?.id && m.receiver_id===selectedContactId) ||
+           (m.sender_id===selectedContactId && m.receiver_id===currentUser?.id)) {
+            messages = [m]; // only last message
         }
-        if(newMsg.receiver_id===currentUser?.id) startAlert(newMsg.text);
-    }).subscribe();
+        if(m.receiver_id===currentUser?.id) startAlert(m.text);
+    })
+    .subscribe();
 }
 
-function startAlert(content:string){ if(isAlerting||!audioUnlocked) return; isAlerting=true; alertAudio.play(); console.log(`PAGER ALERT from ${content.substring(0,20)}...`);}
-function stopAlert(){ if(!isAlerting) return; isAlerting=false; alertAudio.pause(); alertAudio.currentTime=0;}
-function unlockAudio(){ if(audioUnlocked) return; const s=new Audio(); s.volume=0; s.play().then(()=>{audioUnlocked=true; showAudioUnlockPrompt=false;}).catch(console.error);}
-function scrollToBottom(){ setTimeout(()=>{const c=document.getElementById('msgContainer'); if(c)c.scrollTop=c.scrollHeight; },100);}
+// --- Alerts ---
+function startAlert(content: string){
+    if(isAlerting || !audioUnlocked) return;
+    isAlerting = true;
+    alertAudio.play();
+    console.log(`PAGER ALERT: ${content}`);
+}
+
+function stopAlert(){
+    if(!isAlerting) return;
+    isAlerting=false;
+    alertAudio.pause();
+    alertAudio.currentTime=0;
+}
+
+// Unlock audio on tap
+function unlockAudio(){
+    if(audioUnlocked) return;
+    const silent = new Audio();
+    silent.volume=0;
+    silent.play().then(()=>{audioUnlocked=true; showAudioUnlockPrompt=false;}).catch(err=>console.error(err));
+}
+
+// --- Mark message as read ---
+async function markAsRead(messageId: string){
+    await supabase.from('messages').update({read:true}).eq('id',messageId);
+    stopAlert();
+}
+
+// --- Scroll ---
+function scrollToBottom(){
+    setTimeout(()=>{
+        const c = document.getElementById('msgContainer');
+        if(c) c.scrollTop=c.scrollHeight;
+    },100);
+}
 </script>
 
-<main on:click={unlockAudio}>
-{#if showAudioUnlockPrompt}<div class="audio-prompt">Tap to enable pager sound</div>{/if}
+<svelte:head>
+    <title>Pager King</title>
+</svelte:head>
 
-<div class="header">
-<h1>📟 Pager King</h1>
-<div class="user-info">
-Logged in as: <strong>{currentUser?.email}</strong>
-<button on:click={()=>supabase.auth.signOut()}>Logout</button>
-</div>
-</div>
+<main class="pager-container" on:click={unlockAudio}>
+    {#if showAudioUnlockPrompt}
+    <div class="audio-prompt" transition:fly={{y:-50,duration:500}}>
+        <p>Tap anywhere to enable pager sound alerts.</p>
+    </div>
+    {/if}
 
-<div class="control-group">
-<label>Contact:</label>
-<select bind:value={selectedContactId} on:change={()=>{selectedContactName=users.find(u=>u.id===selectedContactId)?.email||'Select Contact'; loadMessages();}}>
-<option value={null} disabled>--- Select Contact ---</option>
-{#each users as u}<option value={u.id}>{u.email}</option>{/each}
-</select>
-</div>
+    <div class="header">
+        <h1>📟 Pager King</h1>
+        <div class="user-info">
+            Logged in as: <strong>{currentUser?.email ?? 'Unknown User'}</strong>
+            <button class="logout-button" on:click={()=>supabase.auth.signOut()}>Logout</button>
+        </div>
+    </div>
 
-<div id="msgContainer" class="msg-container" on:click={stopAlert}>
-{#if isLoading}<p class="loading-state">Loading messages...</p>
-{:else if !selectedContactId}<p class="placeholder-state">Select a contact.</p>
-{:else if messages.length===0}<p class="placeholder-state">No messages yet.</p>
-{:else}
-{#each messages as m (m.id)}
-<div class="message-entry {m.sender_id===currentUser?.id?'out':'in'}">
-<span>{m.text}</span>
-<span class="timestamp">{new Date(m.created_at).toLocaleTimeString()}</span>
-</div>
-{/each}
-{/if}
-</div>
+    <div class="control-group">
+        <label for="contact-select">Contact:</label>
+        <select id="contact-select" bind:value={selectedContactId} on:change={()=>{
+            selectedContactName = users.find(u=>u.id===selectedContactId)?.email || 'Select Contact';
+            loadMessages();
+        }}>
+            <option value={null} disabled>--- Select Contact ---</option>
+            {#each users.filter(u=>u.id!==currentUser?.id) as u}
+                <option value={u.id}>{u.email}</option>
+            {/each}
+        </select>
+    </div>
 
-<form on:submit|preventDefault={sendMessage}>
-<input type="text" bind:value={newMessage} placeholder="Type your message" disabled={!selectedContactId} required/>
-<button type="submit" disabled={!selectedContactId || newMessage.trim()===''}>Send Page</button>
-</form>
+    <div id="msgContainer" class="msg-container" class:alerting={isAlerting} on:click={stopAlert}>
+        {#if isLoading}<p class="loading-state">Loading messages...</p>
+        {:else if !selectedContactId}<p class="placeholder-state">Select a contact to start paging.</p>
+        {:else if messages.length===0}<p class="placeholder-state">No messages yet. Send a page!</p>
+        {:else}
+            {#each messages as m (m.id)}
+                <div class="message-entry {m.sender_id===currentUser?.id?'out':'in'}" on:introend={()=>{if(m.receiver_id===currentUser?.id&&!m.read) markAsRead(m.id)}}>
+                    <span class="message-content">{m.text}</span>
+                    <span class="timestamp">{new Date(m.created_at).toLocaleTimeString()}</span>
+                </div>
+            {/each}
+        {/if}
+    </div>
 
-{#if errorMsg}<p class="error-message">{errorMsg}</p>{/if}
+    <form on:submit|preventDefault={sendMessage} class="send-form">
+        <input type="text" bind:value={newMessage} placeholder="Type your page message..." disabled={!selectedContactId} required/>
+        <button type="submit" disabled={!selectedContactId||newMessage.trim()===''}>Send Page</button>
+    </form>
+
+    {#if errorMsg}<p class="error-message">{errorMsg}</p>{/if}
 </main>
 
 <style>
-/* Simplified CSS for brevity; you can paste your existing styles here */
-.pager-container {max-width:600px;margin:20px auto;padding:20px;display:flex;flex-direction:column;gap:15px;font-family:monospace;}
-.header{display:flex;justify-content:space-between;align-items:center;}
-.msg-container{height:350px;overflow-y:auto;border:1px solid #ddd;padding:10px;border-radius:4px;display:flex;flex-direction:column;gap:8px;background:#f9f9f9;}
-.message-entry.in{align-self:flex-start;background:#e1ffc7;padding:8px 12px;border-radius:18px;}
-.message-entry.out{align-self:flex-end;background:#d1eaff;padding:8px 12px;border-radius:18px;}
+.pager-container {
+    max-width: 600px; margin: 20px auto; padding: 20px; border: 2px solid #d50000; border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1); display:flex;flex-direction:column;gap:15px; font-family:monospace; position:relative;
+    background:#f9f9f9;
+}
+.header {display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eee;padding-bottom:10px;}
+.header h1{font-size:1.8em;margin:0;}
+.user-info{font-size:0.85em;color:#555;display:flex;align-items:center;gap:10px;}
+.logout-button{padding:5px 10px;font-size:0.8em;background-color:#ff1744;color:white;border:none;border-radius:4px;cursor:pointer;}
+.control-group{display:flex;align-items:center;gap:10px;}
+select{padding:8px;border-radius:4px;border:1px solid #ccc;flex-grow:1;font-family:inherit;}
+.msg-container{height:350px;overflow-y:auto;border:1px solid #d50000;padding:10px;border-radius:4px;display:flex;flex-direction:column;gap:8px;background-color:#fff9c4;transition:background-color 0.5s;}
+.msg-container.alerting{background-color:#ff1744;border-color:#d50000;animation:flash-border 1s infinite alternate;cursor:pointer;}
+@keyframes flash-border{from{border-color:#d50000;}to{border-color:#ff1744;}}
+.message-entry{max-width:80%;padding:8px 12px;border-radius:18px;line-height:1.4;font-size:0.9em;display:flex;flex-direction:column;position:relative;}
+.message-entry.in{align-self:flex-start;background-color:#fff176;border-bottom-left-radius:4px;}
+.message-entry.out{align-self:flex-end;background-color:#ff1744;color:white;border-bottom-right-radius:4px;}
+.timestamp{font-size:0.7em;color:#777;margin-top:2px;text-align:right;}
+.message-entry.in .timestamp{text-align:left;}
 .send-form{display:flex;gap:10px;}
-.send-form input{flex-grow:1;padding:10px;}
-.send-form button{padding:10px 15px;}
-.error-message{color:red;text-align:center;margin-top:10px;}
-.audio-prompt{background:#ffeb3b;padding:10px;text-align:center;font-weight:bold;margin-bottom:10px;}
+.send-form input[type="text"]{flex-grow:1;padding:10px;border:1px solid #ccc;border-radius:4px;font-family:inherit;}
+.send-form button{padding:10px 15px;background-color:#d50000;color:white;border:none;border-radius:4px;cursor:pointer;}
+.send-form button:disabled{background-color:#ff8a80;cursor:not-allowed;}
+.loading-state,.placeholder-state{text-align:center;color:#777;margin-top:50px;}
+.audio-prompt{position:absolute;top:0;left:0;right:0;padding:20px;background:#ffeb3b;color:#333;text-align:center;cursor:pointer;font-weight:bold;z-index:10;border-top-left-radius:8px;border-top-right-radius:8px;}
 </style>
