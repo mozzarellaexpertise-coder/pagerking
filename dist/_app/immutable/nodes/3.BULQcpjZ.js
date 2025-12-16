@@ -1,0 +1,1 @@
+import{f as p,a as m}from"../chunks/DqXKHUsY.js";import"../chunks/DybgDApQ.js";import{p as n}from"../chunks/COVjswXf.js";var t=p('<main class="svelte-x1i5gj"><h1>Welcome to your Dashboard</h1> <p>You are now signed in 🎉</p></main>');function f(o,a){n(a,"data",8);var r=t();m(o,r)}export{f as component};

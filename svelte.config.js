@@ -1,20 +1,14 @@
-// svelte.config.js
-
-// 1. IMPORT THE CORRECT ADAPTER
-import adapter from '@sveltejs/adapter-vercel'; 
-import preprocess from 'svelte-preprocess';
+import adapterVercel from '@sveltejs/adapter-vercel';
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
-    // We can keep the preprocess block
-    preprocess: preprocess(),
-
-    kit: {
-        // 2. USE THE CORRECT ADAPTER
-        adapter: adapter(),
-        
-        // We no longer need the 'prerender' block since Vercel handles dynamic rendering
+  kit: {
+    adapter: adapterVercel(),
+    // optional: prerender false (default)
+    prerender: {
+      default: false
     }
+  }
 };
 
 export default config;

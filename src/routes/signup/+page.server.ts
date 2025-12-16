@@ -1,15 +1,20 @@
-// src/routes/signup/+page.server.ts
+import { getSupabaseClient } from '$lib/supabaseClient';
+import type { Actions } from './$types';
 
-import { redirect } from '@sveltejs/kit';
-import type { PageServerLoad } from './$types';
+export const actions: Actions = {
+  default: async ({ request }) => {
+    const formData = await request.formData();
+    const email = formData.get('email')?.toString() || '';
+    const password = formData.get('password')?.toString() || '';
 
-export const load: PageServerLoad = async ({ locals: { safeGetSession } }) => {
-	const { session } = await safeGetSession();
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password
+    });
 
-	if (session) {
-		// If the user is already logged in, send them home
-		throw redirect(303, '/');
-	}
+    if (error) return { success: false, error: error.message };
 
-	return {};
+    return { success: true, user: data.user };
+  }
 };

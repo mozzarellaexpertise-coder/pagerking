@@ -1,0 +1,1 @@
+function n(i,e){throw new Error("Supabase URL and Anon Key are required for client initialization.")}function a(){throw new Error("Supabase client has not been initialized. Ensure it is initialized in +layout.ts")}export{a as g,n as i};

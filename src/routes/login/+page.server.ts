@@ -1,16 +1,17 @@
-// src/routes/login/+page.server.ts
-import { redirect } from '@sveltejs/kit';
-import type { PageServerLoad } from './$types';
+import { getSupabaseClient } from '$lib/supabaseClient';
+import type { Actions } from './$types';
 
-// This function redirects logged-in users AWAY from the login page.
-export const load: PageServerLoad = async ({ locals: { safeGetSession } }) => {
-	const { session } = await safeGetSession();
+export const actions: Actions = {
+  default: async ({ request }) => {
+    const formData = await request.formData();
+    const email = formData.get('email')?.toString() || '';
+    const password = formData.get('password')?.toString() || '';
 
-	if (session) {
-		// If a session IS found, redirect to the home page.
-		throw redirect(303, '/');
-	}
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-	// If no session exists, allow the login page to render.
-	return {};
+    if (error) return { success: false, error: error.message };
+
+    return { success: true, user: data.user };
+  }
 };
