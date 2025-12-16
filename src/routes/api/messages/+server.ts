@@ -7,7 +7,7 @@ const supabase = createClient(
 );
 
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*', // dev-friendly
+  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type'
 };
@@ -26,10 +26,11 @@ export async function GET() {
       .order('created_at', { ascending: false })
       .limit(50);
 
-    if (error) return json({ ok: false, error: error.message }, { status: 500, headers: CORS_HEADERS });
+    if (error) throw error;
 
     return json({ ok: true, data }, { headers: CORS_HEADERS });
   } catch (err: any) {
+    console.error('GET /api/messages error:', err.message);
     return json({ ok: false, error: err.message }, { status: 500, headers: CORS_HEADERS });
   }
 }
@@ -49,10 +50,11 @@ export async function POST({ request }: { request: Request }) {
       .select()
       .single();
 
-    if (error) return json({ ok: false, error: error.message }, { status: 500, headers: CORS_HEADERS });
+    if (error) throw error;
 
     return json({ ok: true, data }, { headers: CORS_HEADERS });
   } catch (err: any) {
+    console.error('POST /api/messages error:', err.message);
     return json({ ok: false, error: err.message }, { status: 500, headers: CORS_HEADERS });
   }
 }
