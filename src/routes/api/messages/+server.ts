@@ -1,13 +1,18 @@
 import { json } from '@sveltejs/kit';
+import { createClient } from '@supabase/supabase-js';
 
-// CORS headers
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_ANON_KEY!
+);
+
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',        // allow all origins (dev)
+  'Access-Control-Allow-Origin': '*', // dev-friendly
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type'
 };
 
-// OPTIONS preflight (no Supabase import)
+// OPTIONS preflight
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
@@ -15,12 +20,6 @@ export async function OPTIONS() {
 // GET messages
 export async function GET() {
   try {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!
-    );
-
     const { data, error } = await supabase
       .from('messages')
       .select('*')
@@ -38,12 +37,6 @@ export async function GET() {
 // POST new message
 export async function POST({ request }: { request: Request }) {
   try {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!
-    );
-
     const body = await request.json();
     const { sender_id, receiver_id, text } = body;
 
