@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { supabase } from '$lib/supabaseClient';
+import { supabase } from '$lib/server/supabaseClient';
 
 export async function GET() {
   const { data, error } = await supabase
