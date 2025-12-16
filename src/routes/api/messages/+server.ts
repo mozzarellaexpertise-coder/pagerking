@@ -1,17 +1,19 @@
 import { json } from '@sveltejs/kit';
 import { supabase } from '$lib/supabase';
 
+// CORS headers
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*', // allow all origins (dev)
+  'Access-Control-Allow-Origin': '*',        // allow all origins
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type'
 };
 
-// Handle preflight requests
+// OPTIONS preflight
 export async function OPTIONS() {
-  return new Response(null, { headers: CORS_HEADERS });
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
+// GET messages
 export async function GET() {
   try {
     const { data, error } = await supabase
@@ -30,6 +32,7 @@ export async function GET() {
   }
 }
 
+// POST new message
 export async function POST({ request }: { request: Request }) {
   try {
     const body = await request.json();
