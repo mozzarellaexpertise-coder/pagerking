@@ -33,18 +33,29 @@ export async function GET() {
 
 export async function POST({ request }: { request: Request }) {
   try {
-    const { sender_id, receiver_id, text } = await request.json();
+    const body = await request.json();
 
-    if (!sender_id || !receiver_id || !text) {
+    const text = body.text?.trim();
+    const sender_id = body.sender_id ?? null;
+    const receiver_id = body.receiver_id ?? null;
+
+    // ✅ Only text is required
+    if (!text) {
       return json(
-        { ok: false, error: 'Missing fields' },
+        { ok: false, error: 'Text is required' },
         { status: 400, headers: CORS_HEADERS }
       );
     }
 
     const { data, error } = await supabase
       .from('messages')
-      .insert([{ sender_id, receiver_id, text }])
+      .insert([
+        {
+          text,
+          sender_id,
+          receiver_id
+        }
+      ])
       .select()
       .single();
 
