@@ -11,6 +11,7 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
+// GET last 50 messages
 export async function GET() {
   try {
     const { data, error } = await supabase
@@ -31,15 +32,15 @@ export async function GET() {
   }
 }
 
+// POST a new message
 export async function POST({ request }: { request: Request }) {
   try {
     const body = await request.json();
 
     const text = body.text?.trim();
-    const sender_id = body.sender_id ?? null;
+    const sender_id = body.sender_id ?? 'Gerald';
     const receiver_id = body.receiver_id ?? null;
 
-    // ✅ Only text is required
     if (!text) {
       return json(
         { ok: false, error: 'Text is required' },
@@ -49,19 +50,16 @@ export async function POST({ request }: { request: Request }) {
 
     const { data, error } = await supabase
       .from('messages')
-      .insert([
-        {
-          text,
-          sender_id,
-          receiver_id
-        }
-      ])
+      .insert([{ text, sender_id, receiver_id }])
       .select()
       .single();
 
     if (error) throw error;
 
-    return json({ ok: true, data }, { headers: CORS_HEADERS });
+    return json(
+      { ok: true, message: `Hello ${sender_id} to ${receiver_id ?? 'All'}!`, data },
+      { headers: CORS_HEADERS }
+    );
   } catch (err: any) {
     console.error('POST /api/messages failed:', err);
     return json(
