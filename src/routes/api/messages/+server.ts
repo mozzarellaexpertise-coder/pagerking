@@ -4,51 +4,41 @@ import { supabase } from '$lib/server/supabaseClient';
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  'Access-Control-Allow-Headers': 'Content-Type'
 };
 
-// OPTIONS preflight
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
 /**
- * GET — Pager mode
- * Returns latest message per sender/receiver pair, including sender name
+ * GET — Fetch latest messages relevant to current user
  */
-export async function GET({ request }: { request: Request }) {
+export async function GET({ locals }: any) {
   try {
-    // Pull messages with sender name from profiles
-    const { data, error } = await supabase
+    // You can pass current user id via query or locals
+    const user_id = locals?.user_id;
+
+    let query = supabase
       .from('messages')
       .select(`
         id,
         text,
-        sender_id,
-        receiver_id,
         created_at,
-        profiles!messages_sender_id_fkey (name)
+        sender:sender_id(id,email,name),
+        receiver:receiver_id(id,email,name)
       `)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: true });
+
+    if (user_id) {
+      query = query.or(`sender_id.eq.${user_id},receiver_id.eq.${user_id},receiver_id.is.null`);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
-    // Deduplicate by sender + receiver
-    const seen = new Set<string>();
-    const latestMessages = [];
-
-    for (const msg of data) {
-      const key = `${msg.sender_id}->${msg.receiver_id ?? 'ALL'}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        latestMessages.push({
-          ...msg,
-          sender_name: msg.profiles?.name || 'Unknown'
-        });
-      }
-    }
-
-    return json({ ok: true, data: latestMessages }, { headers: CORS_HEADERS });
+    return json({ ok: true, data }, { headers: CORS_HEADERS });
   } catch (err: any) {
     console.error('GET /api/messages failed:', err);
     return json({ ok: false, error: err.message }, { status: 500, headers: CORS_HEADERS });
@@ -56,27 +46,33 @@ export async function GET({ request }: { request: Request }) {
 }
 
 /**
- * POST — Insert a message (history preserved)
+ * POST — Insert a new message
  */
-export async function POST({ request, locals }: { request: Request; locals: any }) {
+export async function POST({ request }: { request: Request }) {
   try {
-    const body = await request.json();
-    const { sender_id, receiver_id, text } = body;
+    const { text, sender_id, receiver_id } = await request.json();
 
-    if (!sender_id || !text) {
-      return json({ ok: false, error: 'Missing fields' }, { status: 400, headers: CORS_HEADERS });
+    if (!text || !sender_id) {
+      return json({ ok: false, error: 'Missing text or sender_id' }, { status: 400, headers: CORS_HEADERS });
     }
-
-    // Optional: enforce that sender_id matches logged-in user
-    // Assuming you pass user info in locals (JWT session)
-    // if (locals.user?.id !== sender_id) {
-    //   return json({ ok: false, error: 'Unauthorized sender' }, { status: 403, headers: CORS_HEADERS });
-    // }
 
     const { data, error } = await supabase
       .from('messages')
-      .insert([{ sender_id, receiver_id: receiver_id || null, text }])
-      .select();
+      .insert([
+        {
+          text,
+          sender_id,
+          receiver_id: receiver_id || null
+        }
+      ])
+      .select(`
+        id,
+        text,
+        created_at,
+        sender:sender_id(id,email,name),
+        receiver:receiver_id(id,email,name)
+      `)
+      .single();
 
     if (error) throw error;
 
