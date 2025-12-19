@@ -2,23 +2,20 @@ import { json } from '@sveltejs/kit';
 import { supabase } from '$lib/server/supabaseClient';
 
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': 'https://pager-king-client.vercel.app',
   'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type'
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Credentials': 'true'
 };
 
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-/**
- * GET — Fetch latest messages relevant to current user
- */
+// GET messages
 export async function GET({ locals }: any) {
   try {
-    // You can pass current user id via query or locals
-    const user_id = locals?.user_id;
-
+    const user_id = locals?.user?.id;
     let query = supabase
       .from('messages')
       .select(`
@@ -45,12 +42,11 @@ export async function GET({ locals }: any) {
   }
 }
 
-/**
- * POST — Insert a new message
- */
-export async function POST({ request }: { request: Request }) {
+// POST message
+export async function POST({ request, locals }: { request: Request; locals: any }) {
   try {
-    const { text, sender_id, receiver_id } = await request.json();
+    const { text, receiver_id } = await request.json();
+    const sender_id = locals.user?.id;
 
     if (!text || !sender_id) {
       return json({ ok: false, error: 'Missing text or sender_id' }, { status: 400, headers: CORS_HEADERS });
@@ -58,23 +54,14 @@ export async function POST({ request }: { request: Request }) {
 
     const { data, error } = await supabase
       .from('messages')
-      .insert([
-        {
-          text,
-          sender_id,
-          receiver_id: receiver_id || null
-        }
-      ])
-.select(`
-  id,
-  text,
-  created_at,
-  sender:profiles!sender_id (
-    id,
-    email,
-    name
-  )
-`).single();
+      .insert([{ text, sender_id, receiver_id: receiver_id || null }])
+      .select(`
+        id,
+        text,
+        created_at,
+        sender:profiles!sender_id(id,email,name)
+      `)
+      .single();
 
     if (error) throw error;
 
