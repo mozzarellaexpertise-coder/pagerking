@@ -10,11 +10,9 @@ export const handle: Handle = async ({ event, resolve }) => {
         import.meta.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
-    // 2. Extract Token
+    // 2. Extract and Verify Token
     if (authHeader?.startsWith('Bearer ')) {
         const token = authHeader.split(' ')[1];
-        
-        // 3. Verify the user with Supabase
         const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
         
         if (!error && user) {
@@ -22,7 +20,7 @@ export const handle: Handle = async ({ event, resolve }) => {
         }
     }
 
-    // 4. Handle CORS Preflight (Crucial for Vercel)
+    // 3. Handle CORS Preflight (OPTIONS request)
     if (event.request.method === 'OPTIONS') {
         return new Response(null, {
             headers: {
@@ -34,12 +32,12 @@ export const handle: Handle = async ({ event, resolve }) => {
         });
     }
 
+    // 4. Resolve the actual request
     const response = await resolve(event);
     
-    // 5. Add CORS to every response
+    // 5. Add CORS headers to the response
     response.headers.set('Access-Control-Allow-Origin', 'https://pager-king-client.vercel.app');
     response.headers.set('Access-Control-Allow-Credentials', 'true');
     
     return response;
-};
 };
