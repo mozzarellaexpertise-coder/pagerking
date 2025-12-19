@@ -65,14 +65,16 @@ export async function POST({ request }: { request: Request }) {
           receiver_id: receiver_id || null
         }
       ])
-      .select(`
-        id,
-        text,
-        created_at,
-        sender:sender_id(id,email,name),
-        receiver:receiver_id(id,email,name)
-      `)
-      .single();
+.select(`
+  id,
+  text,
+  created_at,
+  sender:profiles!sender_id (
+    id,
+    email,
+    name
+  )
+`).single();
 
     if (error) throw error;
 
