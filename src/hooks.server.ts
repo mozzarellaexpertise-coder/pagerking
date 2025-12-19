@@ -5,7 +5,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     // 1. Grab environment variables safely (checking both Vite and Node styles)
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.SUPABASE_URL;
     const serviceKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY;
-
+//?????
     // 2. Handle CORS Preflight (OPTIONS) - MUST be first to prevent browser blocking
     if (event.request.method === 'OPTIONS') {
         return new Response(null, {
