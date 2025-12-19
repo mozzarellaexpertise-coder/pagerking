@@ -1,19 +1,25 @@
 import type { Handle } from '@sveltejs/kit';
-import { createClient } from '@supabase/supabase-js';
-import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from '$env/static/private';
-
-const supabaseAdmin = createClient(
-  SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY
-);
+import { createServerClient } from '@supabase/ssr';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '$env/static/private';
 
 export const handle: Handle = async ({ event, resolve }) => {
-  const { data: { user }, error } =
-    await supabaseAdmin.auth.getUserByCookie(event.request);
+  event.locals.supabase = createServerClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        get: (key) => event.cookies.get(key),
+        set: (key, value, options) =>
+          event.cookies.set(key, value, options),
+        remove: (key, options) =>
+          event.cookies.delete(key, options)
+      }
+    }
+  );
 
-  if (error) {
-    console.error('Supabase auth error:', error.message);
-  }
+  const {
+    data: { user }
+  } = await event.locals.supabase.auth.getUser();
 
   event.locals.user = user ?? null;
 
