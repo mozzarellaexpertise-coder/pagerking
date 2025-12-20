@@ -15,23 +15,29 @@ export async function POST({ request }) {
     if (!text) return json({ ok: false, error: 'Message cannot be empty' }, { status: 400 });
 
     const sender = userData.user.email;
-    const receiver = body.receiver || 'All'; // default if you want broadcast
+    const receiver = body.receiver || 'All';
 
-    // Delete previous message from this sender
-    await supabase.from('messages').delete().eq('sender_email', sender);
+    // Delete previous outgoing message safely (one-per-user)
+    const { error: delError } = await supabase.from('messages').delete().eq('sender_email', sender);
+    if (delError) console.warn('Delete previous message failed (might be empty)', delError.message);
 
     // Insert new message
-    const { error } = await supabase.from('messages').insert({
+    const { error: insertError } = await supabase.from('messages').insert({
       sender_email: sender,
       receiver_email: receiver,
       text,
+      created_at: new Date().toISOString()
     });
 
-    if (error) return json({ ok: false, error: error.message }, { status: 500 });
+    if (insertError) {
+      console.error('Insert message error:', insertError.message);
+      return json({ ok: false, error: insertError.message }, { status: 500 });
+    }
 
     return json({ ok: true });
+
   } catch (err) {
-    console.error(err);
+    console.error('Unexpected sendMessage error:', err);
     return json({ ok: false, error: 'Internal server error' }, { status: 500 });
   }
 }

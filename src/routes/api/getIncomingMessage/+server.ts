@@ -12,13 +12,12 @@ export async function GET({ request, url }) {
 
     const email = url.searchParams.get('email') || userData.user.email;
 
-    // ✅ Use maybeSingle() instead of single() to avoid crashing if no messages
     const { data, error } = await supabase
       .from('messages')
       .select('text')
       .eq('receiver_email', email)
       .order('created_at', { ascending: false })
-      .maybeSingle(); // <--- change here
+      .maybeSingle(); // safe: returns null if no message
 
     if (error) {
       console.error('Supabase query error:', error);
