@@ -10,24 +10,30 @@ export async function GET({ request, url }) {
     const { data: userData, error: userErr } = await supabase.auth.getUser(token);
     if (userErr || !userData?.user) return json({ ok: false, error: 'Unauthorized' }, { status: 401 });
 
-    const email = url.searchParams.get('email') || userData.user.email;
+    const email = userData.user.email;
 
+    // Fetch messages where user is sender or receiver, or public (receiver = 'All')
     const { data, error } = await supabase
       .from('messages')
-      .select('text')
-      .eq('receiver_email', email)
+      .select('*')
+      .or(`sender_email.eq.${email},receiver_email.eq.${email},receiver_email.eq.All`)
       .order('created_at', { ascending: false })
-      .maybeSingle(); // safe: returns null if no message
+      .limit(20); // last 20 messages
 
-    if (error) {
-      console.error('Supabase query error:', error);
-      return json({ ok: false, error: error.message }, { status: 500 });
-    }
+    if (error) return json({ ok: false, error: error.message }, { status: 500 });
 
-    return json({ ok: true, message: data?.text || '' });
+    return json({
+      ok: true,
+      messages: data.map(msg => ({
+        sender: msg.sender_email,
+        receiver: msg.receiver_email,
+        text: msg.text,
+        created_at: msg.created_at
+      }))
+    });
 
   } catch (err) {
-    console.error('Unexpected error in getIncomingMessage:', err);
+    console.error('getIncomingMessage error:', err);
     return json({ ok: false, error: 'Internal server error' }, { status: 500 });
   }
 }
