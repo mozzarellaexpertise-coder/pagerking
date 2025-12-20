@@ -12,20 +12,23 @@ export async function GET({ request, url }) {
 
     const email = url.searchParams.get('email') || userData.user.email;
 
-    // Fetch latest incoming message to this email
+    // ✅ Use maybeSingle() instead of single() to avoid crashing if no messages
     const { data, error } = await supabase
       .from('messages')
       .select('text')
       .eq('receiver_email', email)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .maybeSingle(); // <--- change here
 
-    if (error && error.code !== 'PGRST116') return json({ ok: false, error: error.message }, { status: 500 });
+    if (error) {
+      console.error('Supabase query error:', error);
+      return json({ ok: false, error: error.message }, { status: 500 });
+    }
 
     return json({ ok: true, message: data?.text || '' });
+
   } catch (err) {
-    console.error(err);
+    console.error('Unexpected error in getIncomingMessage:', err);
     return json({ ok: false, error: 'Internal server error' }, { status: 500 });
   }
 }
