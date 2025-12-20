@@ -1,49 +1,63 @@
 import { json } from '@sveltejs/kit';
+import { supabase } from '$lib/server/supabaseClient';
 
 /**
- * Define CORS headers to allow your specific client domain.
- * In production, replace '*' with 'https://pager-king-client.vercel.app'
+ * GET /api/currentUser
+ * Purpose:
+ *  - Validate JWT sent from client
+ *  - Return the authenticated Supabase user
  */
-const CORS_HEADERS = {
-    'Access-Control-Allow-Origin': 'https://pager-king-client.vercel.app',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Credentials': 'true'
-};
+export async function GET({ request }) {
+  try {
+    // 1️⃣ Read Authorization header
+    const authHeader = request.headers.get('authorization');
 
-/**
- * Handle OPTIONS preflight requests (Required for Cross-Origin requests)
- */
-export async function OPTIONS() {
-    return new Response(null, { 
-        status: 204, 
-        headers: CORS_HEADERS 
-    });
-}
-
-/**
- * GET — Returns the current authenticated user's data
- */
-export async function GET({ locals }) {
-    // locals.user is populated by the handle hook in src/hooks.server.ts
-    // if the Authorization header was valid.
-    if (!locals.user) {
-        return json(
-            { ok: false, user: null, error: 'Unauthorized' }, 
-            { status: 401, headers: CORS_HEADERS }
-        );
+    if (!authHeader) {
+      return json(
+        { error: 'Authorization header missing' },
+        { status: 401 }
+      );
     }
 
+    // 2️⃣ Extract Bearer token
+    const token = authHeader.replace('Bearer ', '').trim();
+
+    if (!token) {
+      return json(
+        { error: 'Invalid authorization token' },
+        { status: 401 }
+      );
+    }
+
+    // 3️⃣ Ask Supabase who this token belongs to
+    const { data, error } = await supabase.auth.getUser(token);
+
+    if (error || !data?.user) {
+      return json(
+        { error: 'Invalid or expired token' },
+        { status: 401 }
+      );
+    }
+
+    // 4️⃣ Success — return user
     return json(
-        {
-            ok: true,
-            user: {
-                id: locals.user.id,
-                email: locals.user.email,
-                name: locals.user.user_metadata?.name || locals.user.email,
-                last_sign_in: locals.user.last_sign_in_at
-            }
-        },
-        { headers: CORS_HEADERS }
+      {
+        user: {
+          id: data.user.id,
+          email: data.user.email,
+          role: data.user.role,
+          created_at: data.user.created_at
+        }
+      },
+      { status: 200 }
     );
+
+  } catch (err) {
+    console.error('❌ /api/currentUser error:', err);
+
+    return json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
 }
